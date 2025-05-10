@@ -1,0 +1,58 @@
+name: Build libGDX Linux aarch64 Natives
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU for aarch64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Generate libGDX project (Desktop only)
+        uses: addnab/docker-run-action@v3
+        with:
+          image: debian:bookworm
+          options: |
+            --platform linux/arm64
+            --volume ${{ github.workspace }}:/project
+          run: |
+            apt-get update -y
+            apt-get install -y wget openjdk-17-jdk
+            wget https://github.com/tommyettinger/gdx-liftoff/releases/download/1.12.1.12/gdx-liftoff-1.12.1.12.jar -O gdx-liftoff.jar
+            # Generate project with ONLY Core + Desktop modules
+            java -jar gdx-liftoff.jar --dir mygame --name MyGame --package com.mygame \
+              --mainClass Main --mods desktop --mods core
+
+      - name: Configure build.gradle
+        run: |
+          cd mygame
+          sed -i "1i buildscript { repositories { mavenCentral() }; dependencies { classpath 'com.badlogicgames.gdx:gdx-jnigen-gradle:2.3.1' } }" build.gradle
+          echo -e "\napply plugin: 'com.badlogicgames.gdx.gdx-jnigen'\njnigen { add(Linux, 64, ARM) }" >> build.gradle
+
+      - name: Build natives
+        uses: addnab/docker-run-action@v3
+        with:
+          image: debian:bookworm
+          options: |
+            --platform linux/arm64
+            --volume ${{ github.workspace }}/myproject:/build
+          run: |
+            apt-get update -y
+            apt-get install -y openjdk-17-jdk gradle g++-aarch64-linux-gnu
+            cd /build
+            ./gradlew jnigen jnigenBuildLinuxArm_64 -Ptarget=linux-arm64
+
+      - name: Verify and upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libgdx-linux-aarch64
+          path: |
+            myproject/build/libs/linux-arm64/*
+            myproject/build/jni/linux-arm64/*
