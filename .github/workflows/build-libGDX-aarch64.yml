@@ -15,7 +15,7 @@ jobs:
         with:
           platforms: arm64
 
-      - name: Generate libGDX project (Desktop only)
+      - name: Generate libGDX project
         uses: addnab/docker-run-action@v3
         with:
           image: debian:bookworm
@@ -24,10 +24,10 @@ jobs:
             --volume ${{ github.workspace }}:/project
           run: |
             apt-get update -y
-            apt-get install -y wget openjdk-17-jdk
+            apt-get install -y wget openjdk-17-jdk xvfb libgl1-mesa-glx
             wget https://github.com/libgdx/gdx-liftoff/releases/download/v1.13.1.4/gdx-liftoff-1.13.1.4.jar -O gdx-liftoff.jar
-            java -jar gdx-liftoff.jar --dir myproject --name MyProject --package com.myproject \
-              --mainClass Main --mods desktop --mods core
+            # Run with Xvfb virtual display
+            xvfb-run -a java -jar gdx-liftoff.jar --dir myproject --name MyProject --package com.myproject --mainClass Main --mods desktop --mods core
 
       - name: Configure build.gradle
         run: |
@@ -48,7 +48,7 @@ jobs:
             cd /build
             ./gradlew jnigen jnigenBuildLinuxArm_64 -Ptarget=linux-arm64
 
-      - name: Verify and upload artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: libgdx-linux-aarch64
